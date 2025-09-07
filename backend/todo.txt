@@ -1,0 +1,17 @@
+backend/
+├── src/
+│   ├── services/
+│   │   ├── SwapService.ts
+│   │   ├── OfframpService.ts
+│   │   └── TransactionService.ts
+│   ├── types/✅
+│   │   ├── swap.types.ts ✅
+│   │   ├── offramp.types.ts ✅
+│   │   └── transaction.types.ts ✅
+│   ├── utils/
+│   │   ├── blockchain.ts ✅
+│   │   └── validation.ts
+│   └── config/
+│       └── index.ts
+├── package.json ✅
+└── tsconfig.json ✅
