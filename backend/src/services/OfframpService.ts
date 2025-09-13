@@ -1,41 +1,74 @@
-import { PaycrestService } from './PaycrestService';
-import { PaycrestCreateOrderRequest, PaycrestCreatedOrderData, PaycrestGetOrderStatusResponse } from '../types/paycrest.types';
+import { PaycrestGatewayService } from './PaycrestGatewayService';
+import { 
+  PaycrestRecipient, 
+  PaycrestSmartContractOrder, 
+  PaycrestGatewayConfig,
+  PaycrestToken,
+  PaycrestNetwork
+} from '../types/paycrest.types';
+import { PAYCREST_GATEWAY_ADDRESS, COMMON_STABLECOINS } from '../utils/blockchain';
 
 export interface CreateOfframpParams {
   amount: string;
-  token: 'USDT' | 'USDC' | string;
-  network?: 'base' | string;
-  recipient: PaycrestCreateOrderRequest['recipient'];
+  token: PaycrestToken;
+  network?: PaycrestNetwork;
+  recipient: PaycrestRecipient;
+  refundAddress: `0x${string}`;
   reference?: string;
-  returnAddress?: string;
 }
 
 export class OfframpService {
-  private readonly paycrest: PaycrestService;
+  private readonly gatewayService: PaycrestGatewayService;
 
-  constructor(paycrest?: PaycrestService) {
-    this.paycrest = paycrest || new PaycrestService();
+  constructor(config?: PaycrestGatewayConfig) {
+    const defaultConfig: PaycrestGatewayConfig = {
+      gatewayAddress: PAYCREST_GATEWAY_ADDRESS,
+      tokenAddress: COMMON_STABLECOINS.USDT,
+      network: 'base',
+      privateKey: process.env.PAYCREST_PRIVATE_KEY || '',
+      rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org'
+    };
+
+    this.gatewayService = new PaycrestGatewayService(config || defaultConfig);
   }
 
-  async createOrder(params: CreateOfframpParams): Promise<PaycrestCreatedOrderData> {
-    const network = params.network || 'base';
-    const rate = await this.paycrest.getRate(params.token, params.amount, params.recipient.currency, network);
+  async createOrder(params: CreateOfframpParams): Promise<PaycrestSmartContractOrder> {
+    if (!params.refundAddress) {
+      throw new Error('Refund address is required for smart contract integration');
+    }
+   
+    const tokenAddress = params.token?.toUpperCase() === 'USDC'
+      ? (process.env.USDC_ADDRESS as `0x${string}`) || (COMMON_STABLECOINS.USDC as `0x${string}`)
+      : (process.env.USDT_ADDRESS as `0x${string}`) || (COMMON_STABLECOINS.USDT as `0x${string}`);
 
-    const order = await this.paycrest.createOrder({
-      amount: params.amount,
-      token: params.token,
-      network,
-      rate,
-      recipient: params.recipient,
-      reference: params.reference,
-      returnAddress: params.returnAddress,
-    });
+    const tokenConfig: PaycrestGatewayConfig = {
+      gatewayAddress: PAYCREST_GATEWAY_ADDRESS,
+      tokenAddress,
+      network: (params.network || 'base') as PaycrestNetwork,
+      privateKey: process.env.PAYCREST_PRIVATE_KEY || '',
+      rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org'
+    };
 
-    return order;
+    const gateway = new PaycrestGatewayService(tokenConfig);
+
+    return gateway.createOrder(
+      params.amount,
+      params.token,
+      params.recipient,
+      params.refundAddress
+    );
   }
 
-  async getStatus(orderId: string): Promise<PaycrestGetOrderStatusResponse['data']> {
-    return this.paycrest.getOrderStatus(orderId);
+  async getOrderInfo(orderId: string): Promise<any> {
+    return this.gatewayService.getOrderInfo(orderId);
+  }
+
+  async getExchangeRate(token: PaycrestToken, amount: string, currency: string): Promise<number> {
+    return this.gatewayService.getExchangeRate(token, amount, currency);
+  }
+
+  async verifyAccount(recipient: PaycrestRecipient): Promise<string> {
+    return this.gatewayService.verifyAccount(recipient);
   }
 }
 

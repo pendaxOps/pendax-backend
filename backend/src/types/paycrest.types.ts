@@ -1,5 +1,3 @@
-// Types for Paycrest Sender API
-
 export interface PaycrestResponse<T = unknown> {
   status: 'success' | 'error' | string;
   message?: string;
@@ -19,8 +17,16 @@ export interface PaycrestRecipient {
   memo?: string;
 }
 
+export interface PaycrestGatewayConfig {
+  gatewayAddress: string;
+  tokenAddress: string;
+  network: PaycrestNetwork;
+  privateKey: string;
+  rpcUrl: string;
+}
+
 export interface PaycrestCreateOrderRequest {
-  amount: string;
+  amount: number;
   token: PaycrestToken;
   network: PaycrestNetwork;
   rate: string;
@@ -41,6 +47,18 @@ export interface PaycrestCreatedOrderData {
   reference?: string;
 }
 
+export interface PaycrestSmartContractOrder {
+  orderId: string;
+  transactionHash: string;
+  amount: string;
+  token: PaycrestToken;
+  network: PaycrestNetwork;
+  rate: string;
+  recipient: PaycrestRecipient;
+  refundAddress: string;
+  status: 'pending' | 'completed' | 'failed';
+}
+
 export interface PaycrestCreateOrderResponse
   extends PaycrestResponse<PaycrestCreatedOrderData> {}
 
@@ -49,9 +67,9 @@ export type PaycrestOrderStatus =
   | 'processing'
   | 'fulfilled'
   | 'validated'
-  | 'settled'
+  | 'completed'
   | 'cancelled'
-  | 'refunded'
+  | 'failed'
   | 'payment_order.pending'
   | 'payment_order.validated'
   | 'payment_order.expired'
@@ -66,7 +84,6 @@ export interface PaycrestOrderStatusData extends PaycrestCreatedOrderData {
 export interface PaycrestGetOrderStatusResponse
   extends PaycrestResponse<PaycrestOrderStatusData> {}
 
-// 4) Webhooks
 export interface PaycrestWebhookPayload {
   event: string;
   orderId: string;
@@ -79,7 +96,6 @@ export interface PaycrestWebhookPayload {
   };
 }
 
-// 5) Currencies and Institutions
 export interface PaycrestCurrency {
   code: string;
   name?: string;

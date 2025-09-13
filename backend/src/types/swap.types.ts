@@ -12,7 +12,7 @@ export interface SwapRequest {
   toToken: string;   
   amount: string;    
   userAddress: Address;
-  slippage?: number; // default 1% ????
+  slippage?: number;
 }
 
 export interface SwapResult {

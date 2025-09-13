@@ -1,4 +1,5 @@
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, getAddress, parseUnits, formatUnits, zeroAddress } from 'viem';
+import { base } from 'viem/chains';
 
 const NETWORKS = {
   base: {
@@ -13,65 +14,84 @@ const NETWORKS = {
   }
 };
 
-
 export const COMMON_STABLECOINS = {
-  USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Base USDC
-  USDT: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // Base USDT
-  DAI: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'   // Base DAI
+  USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  USDT: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
+  DAI: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'
 };
 
-export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000';
+export const ETH_ADDRESS = zeroAddress;
 
+// Paycrest Gateway Contract Address (Base Network)
+export const PAYCREST_GATEWAY_ADDRESS = '0x30F6A8457F8E42371E204a9c103f2Bd42341dD0F';
 
-export function getProvider(network: 'base' | 'sepolia' = 'base'): ethers.JsonRpcProvider {
+export function getPublicClient(network: 'base' | 'sepolia' = 'base') {
   const networkConfig = NETWORKS[network];
-  return new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+  return createPublicClient({
+    chain: network === 'base' ? base : undefined,
+    transport: http(networkConfig.rpcUrl)
+  });
 }
 
-
-export function createWallet(privateKey: string, network: 'base' | 'sepolia' = 'base'): ethers.Wallet {
-  const provider = getProvider(network);
-  return new ethers.Wallet(privateKey, provider);
+export function createWallet(privateKey: `0x${string}`, network: 'base' | 'sepolia' = 'base') {
+  const networkConfig = NETWORKS[network];
+  return createWalletClient({
+    chain: network === 'base' ? base : undefined,
+    transport: http(networkConfig.rpcUrl),
+    account: privateKey
+  });
 }
 
 export async function getTokenBalance(
-  address: string, 
-  tokenAddress: string = ETH_ADDRESS,
+  address: `0x${string}`, 
+  tokenAddress: `0x${string}` = ETH_ADDRESS,
   network: 'base' | 'sepolia' = 'base'
 ): Promise<string> {
-  const provider = getProvider(network);
+  const publicClient = getPublicClient(network);
   
   if (tokenAddress === ETH_ADDRESS) {
-    // Native ETH balance
-    const balance = await provider.getBalance(address);
-    return ethers.formatEther(balance);
+    const balance = await publicClient.getBalance({ address });
+    return formatUnits(balance, 18);
   } else {
-    // ERC-20 token balance
-    const contract = new ethers.Contract(tokenAddress, [
-      'function balanceOf(address) view returns (uint256)',
-      'function decimals() view returns (uint8)'
-    ], provider);
-    
     const [balance, decimals] = await Promise.all([
-      contract.balanceOf(address),
-      contract.decimals()
+      publicClient.readContract({
+        address: tokenAddress,
+        abi: [{
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ name: '', type: 'uint256' }]
+        }],
+        functionName: 'balanceOf',
+        args: [address]
+      }),
+      publicClient.readContract({
+        address: tokenAddress,
+        abi: [{
+          name: 'decimals',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ name: '', type: 'uint8' }]
+        }],
+        functionName: 'decimals'
+      })
     ]);
     
-    return ethers.formatUnits(balance, decimals);
+    return formatUnits(balance, decimals);
   }
 }
 
-
 export function isStablecoin(tokenAddress: string): boolean {
-  // Check against common stablecoins, but allow any token
   return Object.values(COMMON_STABLECOINS).includes(tokenAddress);
 }
 
 export async function getTokenInfo(
-  tokenAddress: string,
+  tokenAddress: `0x${string}`,
   network: 'base' | 'sepolia' = 'base'
 ): Promise<{ symbol: string; decimals: number; name: string }> {
-  const provider = getProvider(network);
+  const publicClient = getPublicClient(network);
   
   if (tokenAddress === ETH_ADDRESS) {
     return {
@@ -81,21 +101,50 @@ export async function getTokenInfo(
     };
   }
   
-  const contract = new ethers.Contract(tokenAddress, [
-    'function symbol() view returns (string)',
-    'function decimals() view returns (uint8)',
-    'function name() view returns (string)'
-  ], provider);
-  
   const [symbol, decimals, name] = await Promise.all([
-    contract.symbol(),
-    contract.decimals(),
-    contract.name()
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: [{
+        name: 'symbol',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }]
+      }],
+      functionName: 'symbol'
+    }),
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: [{
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }]
+      }],
+      functionName: 'decimals'
+    }),
+    publicClient.readContract({
+      address: tokenAddress,
+      abi: [{
+        name: 'name',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }]
+      }],
+      functionName: 'name'
+    })
   ]);
   
   return { symbol, decimals, name };
 }
 
 export function isValidAddress(address: string): boolean {
-  return ethers.isAddress(address);
+  try {
+    getAddress(address);
+    return true;
+  } catch {
+    return false;
+  }
 }
